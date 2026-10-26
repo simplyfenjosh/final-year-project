@@ -147,12 +147,3 @@ Database login, `sla_unit` (hours, minutes or seconds), how long before a resolv
 
 **Real email (optional).** By default every alert is also saved in **Admin > Emails** and nothing is sent. To send real email, run `composer require phpmailer/phpmailer` in this folder, then fill in the `mail` settings (a Gmail app password works). This sending path was not tested in my sandbox. Everything else was.
 
-## Honest limits
-
-- The demo cases and the dashboard figures are **fake**, made only so the screens are not empty. Do not present them as research results. Collect real data from a pilot and compare it with the manual process you describe in Chapter 3.
-- Not included (as in your Chapter One scope): SMS and WhatsApp alerts, a mobile app, links to KIU's student portal, and other campuses.
-- A Naive Bayes model learns from word counts. It does not understand meaning, so it needs good examples. Add more at **Admin > AI classifier**.
-
-## Screenshots to take for Chapter 4
-
-Home page, submit form with the AI hint showing, receipt slip, a case page with the escalation ladder, officer queue, an escalation in the history, admin dashboard, escalation log, AI classifier results, the emails page, and the Settings page.
