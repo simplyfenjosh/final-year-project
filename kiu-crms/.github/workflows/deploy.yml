@@ -1,6 +1,8 @@
 name: Deploy Website to InfinityFree
 
 on:
+
+   workflow_dispatch:
    push:
       branches: [ main ]
 
