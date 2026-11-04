@@ -1,24 +1,16 @@
-name: Deploy Website to InfinityFree
-
-on:
-   push:
-     branches: [ main ]
-   workflow_dispatch: 
-
-jobs:
-   web-deploy:
-       name: Deploy
-       runs-on: ubuntu-latest
-       steps:
-         - name: Get latest code from repo
-           uses: actions/checkout@v4
-
-         - name: Sync files to server via FTP
-           uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-           with:
-              server: ${{ secrets.SECRETS_FTP_SERVER }}
-              username: ${{ secrets.SECRETS_FTP_USERNAME }}
-              password: ${{ secrets.SECRETS_FTP_PASSWORD }}
-              local-dir: ./res/
-              server-dir: ./
-
+‎name: Deploy to InfinityFree
+‎on:
+‎  push:
+‎    branches: [main]
+‎  workflow_dispatch:
+‎jobs:
+‎  deploy:
+‎    runs-on: ubuntu-latest
+‎    steps:
+‎      - uses: actions/checkout@v4
+‎      - uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+‎        with:
+‎          server: ${{ secrets.FTP_SERVER }}
+‎          username: ${{ secrets.FTP_USERNAME }}
+‎          password: ${{ secrets.FTP_PASSWORD }}
+‎          server-dir: /htdocs/
