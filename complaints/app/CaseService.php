@@ -30,18 +30,6 @@ class CaseService
         return $user['full_name'] . ' (Level ' . (int)$user['officer_level'] . ')';
     }
 
-    public static function fallbackCategoryId(PDO $pdo): int
-    {
-        $id = $pdo->query("SELECT id FROM categories WHERE name = 'General and other' AND is_active = 1 LIMIT 1")->fetchColumn();
-        if (!$id) {
-            $id = $pdo->query('SELECT id FROM categories WHERE is_active = 1 ORDER BY id LIMIT 1')->fetchColumn();
-        }
-        if (!$id) {
-            throw new RuntimeException('No categories are set up yet. Ask the administrator to add one.');
-        }
-        return (int)$id;
-    }
-
     /** Picks the officer at a level with the fewest open cases (a simple way to share the work fairly). */
     public static function findAssignee(PDO $pdo, int $categoryId, int $level, ?int $excludeUserId = null): ?array
     {
@@ -132,7 +120,8 @@ class CaseService
     public static function fetch(PDO $pdo, int $id): ?array
     {
         $st = $pdo->prepare(
-            'SELECT c.*, cat.name AS category_name, cat.department,
+            'SELECT c.*, cat.name AS category_name,
+                    cat.department AS department,
                     a.full_name AS assignee_name, s.full_name AS student_name, s.email AS student_email, s.reg_no AS student_reg
              FROM cases c
              JOIN categories cat ON cat.id = c.category_id
@@ -142,6 +131,16 @@ class CaseService
         );
         $st->execute([$id]);
         return $st->fetch() ?: null;
+    }
+
+    /** Uses the general category when available, otherwise the first active category. */
+    public static function fallbackCategoryId(PDO $pdo): ?int
+    {
+        $id = $pdo->query(
+            "SELECT id FROM categories WHERE is_active = 1
+             ORDER BY (LOWER(name) = 'general and other') DESC, id ASC LIMIT 1"
+        )->fetchColumn();
+        return $id === false ? null : (int)$id;
     }
 
     public static function events(PDO $pdo, int $caseId, bool $includeInternal): array
@@ -261,12 +260,20 @@ class CaseService
         $urgent     = Classifier::urgency($text)['urgent'];
         $categoryId = (int)$in['category_id'];
         $aiPicked   = false;
+        $fallbackPicked = false;
         if ($categoryId === 0) {
             $aiPicked = true;
             $sure = $prediction['category_id'] !== null && $prediction['confidence'] >= (float)config('ai_min_confidence', 0.4);
-            $categoryId = $sure ? (int)$prediction['category_id'] : self::fallbackCategoryId($pdo);
+            if (!$sure) {
+                $categoryId = self::fallbackCategoryId($pdo) ?? 0;
+                $fallbackPicked = true;
+            } else {
+                $categoryId = (int)$prediction['category_id'];
+            }
         }
-        $cat = $pdo->prepare('SELECT name, department FROM categories WHERE id = ? AND is_active = 1');
+        $cat = $pdo->prepare(
+            'SELECT c.name, c.department FROM categories c WHERE c.id = ? AND c.is_active = 1'
+        );
         $cat->execute([$categoryId]);
         $category = $cat->fetch();
         if (!$category) {
@@ -287,7 +294,7 @@ class CaseService
 
         $result = self::txn($pdo, function () use (
             $pdo, $in, $title, $desc, $type, $categoryId, $category, $base, $priority, $due, $assignee, $code,
-            $anon, $aiPicked, $prediction, $file, $upload, $hours, &$savedFile
+            $anon, $aiPicked, $fallbackPicked, $prediction, $file, $upload, $hours, &$savedFile
         ) {
             $now = now();
             $pdo->prepare(
@@ -309,9 +316,11 @@ class CaseService
             self::addEvent($pdo, $id, 'SUBMITTED', $label, $anon ? null : (int)$in['student_id'],
                 ucfirst($type) . ' submitted' . ($base === 'Urgent' ? ' and marked urgent because it mentions a safety or welfare risk.' : '.'));
 
-            $how = $aiPicked
-                ? 'Category chosen by the AI (' . Classifier::percent($prediction['confidence']) . '% sure).'
-                : 'Category chosen by the student.';
+            $how = $fallbackPicked
+                ? 'AI confidence was below the threshold; the fallback category was selected (' . Classifier::percent($prediction['confidence']) . '% confidence).'
+                : ($aiPicked
+                    ? 'Category chosen by the AI (' . Classifier::percent($prediction['confidence']) . '% confidence).'
+                    : 'Category chosen by the student.');
             self::addEvent($pdo, $id, 'ROUTED', 'System', null,
                 'Sent to ' . $category['department'] . '. ' . $how
                 . ($assignee ? ' Handler: ' . $assignee['full_name'] . ' (Level 1).' : ' No Level 1 officer is available yet.')
@@ -453,7 +462,7 @@ class CaseService
             if ((int)$case['category_id'] === $newCategoryId) {
                 throw new RuntimeException('The case is already in that category.');
             }
-            $st = $pdo->prepare('SELECT name, department FROM categories WHERE id = ? AND is_active = 1');
+            $st = $pdo->prepare('SELECT c.name, c.department FROM categories c WHERE c.id = ? AND c.is_active = 1');
             $st->execute([$newCategoryId]);
             $cat = $st->fetch();
             if (!$cat) {

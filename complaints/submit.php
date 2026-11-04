@@ -7,7 +7,9 @@ if ($user && $user['role'] !== 'student') {
 }
 
 $pdo  = db();
-$cats = $pdo->query('SELECT id, name, department FROM categories WHERE is_active = 1 ORDER BY name')->fetchAll();
+$cats = $pdo->query(
+    'SELECT id, name, department FROM categories WHERE is_active = 1 ORDER BY name'
+)->fetchAll();
 $old  = ['type' => 'complaint', 'title' => '', 'description' => '', 'category_id' => '0', 'anonymous' => ''];
 $errors = [];
 
@@ -99,11 +101,12 @@ page_header('Submit a case', 'submit.php');
     <div class="field">
       <label for="category_id">Category</label>
       <select id="category_id" name="category_id">
-        <option value="0" <?= $old['category_id'] === '0' ? 'selected' : '' ?>>Let the system choose (recommended)</option>
+        <option value="0" <?= $old['category_id'] === '0' ? 'selected' : '' ?>>Let the AI choose when confident</option>
         <?php foreach ($cats as $c): ?>
           <option value="<?= (int)$c['id'] ?>" <?= $old['category_id'] === (string)$c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?> (<?= e($c['department']) ?>)</option>
         <?php endforeach; ?>
       </select>
+      <div class="hint">If the AI is unsure, the system uses the General and other category when available, or the first active category. You can choose a different category yourself.</div>
     </div>
 
     <div class="field">

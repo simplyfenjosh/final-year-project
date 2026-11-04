@@ -179,7 +179,9 @@ page_header($case['reference'], '');
         <dt>Submitted on</dt><dd><?= e(fmt_dt($case['created_at'])) ?></dd>
         <dt>Submitted by</dt><dd><?= $case['is_anonymous'] ? 'Anonymous' : e($case['student_name'] ?? 'Student') ?>
           <?php if ($isStaff && !$case['is_anonymous'] && $case['student_reg']): ?><span class="muted small" style="font-weight:400"> (<?= e($case['student_reg']) ?>)</span><?php endif; ?></dd>
-        <dt>Current Handler</dt><dd><?= e($case['assignee_name'] ?? 'Not assigned yet') ?></dd>
+        <dt>Current Handler</dt><dd><?= e($case['assignee_name'] ?? 'Not assigned yet') ?>
+          <?php if ($case['assigned_to'] && $case['level_entered_at']): ?><br><span class="muted small">Received <?= e(fmt_dt($case['level_entered_at'])) ?></span><?php endif; ?>
+        </dd>
         <?php if ($isOpen): ?>
           <dt><?= $case['stage'] === 'response' ? 'Must respond' : 'Must resolve' ?></dt><dd><?= countdown_span($case['due_at'], true) ?><br><span class="muted small" style="font-weight:400"><?= e(fmt_dt($case['due_at'])) ?></span></dd>
         <?php endif; ?>
@@ -195,7 +197,8 @@ page_header($case['reference'], '');
             $n = (int)$lv['level'];
             $cur = (int)$case['current_level'];
             $isCurrent = ($n === $cur) && $isOpen;
-            $cls = $isCurrent ? 'current' : ($n <= $cur ? 'done' : ''); ?>
+            $isPrevious = $n < $cur;
+            $cls = 'level-' . $n . ($isCurrent ? ' current' : ($isPrevious ? ' previous' : ($n === $cur ? ' done' : ''))); ?>
           <li class="<?= e($cls) ?>" data-level="<?= $n ?>">
             <span class="name"><?= e($lv['title']) ?></span>
             <span class="sub"><?php if ($isCurrent): ?><?= e($case['assignee_name'] ?? 'No officer assigned') ?> &middot; <?= priority_badge($case['priority']) ?><?php elseif ($n === $cur): ?><?= e($case['assignee_name'] ?? 'Handled') ?> &middot; handled the case<?php elseif ($n < $cur): ?>Did not respond in time<?php else: ?>Responds within <?= e(sla_label((float)$lv['response_hours'])) ?><?php endif; ?></span>

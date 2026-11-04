@@ -58,6 +58,13 @@ s = sess()
 r = get(s, "/"); check("home 200", r.status_code == 200 and "owner and a deadline" in r.text, r.status_code)
 check("home has no php errors", not php_errors(r.text), php_errors(r.text))
 check("home shows 4 ladder rungs", r.text.count('class="rung"') == 4)
+check("home explains escalation level colors and timing",
+      "Quick key" in r.text and "Previous level" in r.text and "time allowed before a case escalates" in r.text)
+check("home key explains case terms and priorities",
+      "Current handler" in r.text and "Resolve within" in r.text and "Senior management is alerted" in r.text
+      and all(f"prio-{priority}" in r.text for priority in ["normal", "high", "urgent", "critical"]))
+check("removed Safety and General categories are not active",
+      sql("SELECT COUNT(*) FROM categories WHERE is_active=1 AND LOWER(name) IN ('safety','safety and security','safety, security and welfare','general and other','other')") == "0")
 for p in ["/login.php", "/register.php", "/submit.php", "/track.php"]:
     r = get(s, p); check(f"{p} 200 no errors", r.status_code == 200 and not php_errors(r.text), (r.status_code, php_errors(r.text)))
 r = get(s, "/my-cases.php"); check("my-cases redirects to login when logged out", r.status_code == 302 and "login.php" in r.headers.get("Location",""))
@@ -97,6 +104,14 @@ r = st.get(BASE + f"/case.php?id={cid}")
 check("student can open own case", r.status_code == 200 and "Escalation ladder" in r.text and not php_errors(r.text), php_errors(r.text))
 aid = sql(f"SELECT id FROM attachments WHERE case_id={cid}")
 r = st.get(BASE + f"/files.php?id={aid}"); check("student can download own attachment", r.status_code == 200 and r.content[:4] == b"\x89PNG", r.status_code)
+
+# low-confidence AI submissions use the configured fallback category
+tok = csrf(st.get(BASE + "/submit.php").text)
+r = st.post(BASE + "/submit.php", data={"_csrf": tok, "type": "complaint", "title": "Florb pexlin quorax", "description": "Xyzz y blargle wump zarn", "category_id": "0"}, allow_redirects=False)
+fallback_id = sql("SELECT COALESCE((SELECT id FROM categories WHERE is_active=1 AND LOWER(name)='general and other' LIMIT 1),(SELECT id FROM categories WHERE is_active=1 ORDER BY id LIMIT 1))")
+check("uncertain AI submission uses fallback category",
+      r.status_code == 302 and "submitted.php" in r.headers.get("Location", "")
+      and sql("SELECT category_id FROM cases WHERE title='Florb pexlin quorax'") == fallback_id)
 
 # bad uploads
 tok = csrf(st.get(BASE + "/submit.php").text)
@@ -145,7 +160,8 @@ r = get(off2, f"/case.php?id={cid}"); check("unrelated officer gets 404", r.stat
 # ---------- anonymous + tracking ----------
 an = sess()
 tok = csrf(an.get(BASE + "/submit.php").text)
-r = an.post(BASE + "/submit.php", data={"_csrf": tok, "type": "complaint", "title": "Guard threatened me", "description": "A security guard at the main gate threatened me last night when I came back late and I feel unsafe.", "category_id": "0", "anonymous": "1"}, allow_redirects=False)
+fees_category = sql("SELECT id FROM categories WHERE name='Fees and payments' AND is_active=1")
+r = an.post(BASE + "/submit.php", data={"_csrf": tok, "type": "complaint", "title": "Finance clerk threatened me over a fee", "description": "A finance clerk threatened me over a disputed tuition payment and I feel unsafe. Please investigate the payment and threat.", "category_id": fees_category, "anonymous": "1"}, allow_redirects=False)
 check("anonymous submit works without login", r.status_code == 302, (r.status_code, r.text[:200]))
 page = an.get(BASE + "/submitted.php").text
 aref = re.search(r'slip-ref">(CRM-\d{4}-\d{5})', page).group(1)
@@ -175,8 +191,13 @@ get(sess(), "/")   # any page view triggers the lazy escalation check
 check("page view triggered escalation", sql(f"SELECT current_level FROM cases WHERE id={acid}") == "2", sql(f"SELECT current_level FROM cases WHERE id={acid}"))
 check("priority raised to Urgent (kept by base urgency)", sql(f"SELECT priority FROM cases WHERE id={acid}") in ("Urgent",))
 check("ESCALATED event logged", sql(f"SELECT COUNT(*) FROM case_events WHERE case_id={acid} AND event_type='ESCALATED'") == "1")
-check("new handler is the level-2 safety officer", sql(f"SELECT u.email FROM cases c JOIN users u ON u.id=c.assigned_to WHERE c.id={acid}") == "safety.l2@kiu.test", sql(f"SELECT u.email FROM cases c JOIN users u ON u.id=c.assigned_to WHERE c.id={acid}"))
-check("new handler got an alert", int(sql(f"SELECT COUNT(*) FROM notifications n JOIN users u ON u.id=n.user_id WHERE u.email='safety.l2@kiu.test' AND n.case_id={acid}")) >= 1)
+check("new handler is the level-2 officer for the selected category", sql(f"SELECT u.email FROM cases c JOIN users u ON u.id=c.assigned_to WHERE c.id={acid}") == "fees.l2@kiu.test", sql(f"SELECT u.email FROM cases c JOIN users u ON u.id=c.assigned_to WHERE c.id={acid}"))
+check("new category officer got an alert", int(sql(f"SELECT COUNT(*) FROM notifications n JOIN users u ON u.id=n.user_id WHERE u.email='fees.l2@kiu.test' AND n.case_id={acid}")) >= 1)
+ladder_page = get(st, f"/case.php?id={acid}")
+check("escalation ladder colors level 2 and grays completed level 1",
+      'class="level-1 previous"' in ladder_page.text and 'class="level-2 current"' in ladder_page.text)
+check("case page shows when the current handler received it",
+      "Current Handler" in ladder_page.text and re.search(r"Received \d{2} [A-Z][a-z]{2} \d{4}, \d{2}:\d{2}", ladder_page.text) is not None)
 check("emails were logged", int(sql("SELECT COUNT(*) FROM email_outbox WHERE status='logged'")) > 5)
 
 # ---------- admin pages ----------
@@ -197,6 +218,9 @@ r = ad.post(BASE + "/admin/classifier.php", data={"_csrf": csrf(page), "do": "te
 check("classifier test page shows hostel", r.status_code == 200 and "Hostel and accommodation" in r.text and not php_errors(r.text))
 r = ad.post(BASE + "/admin/classifier.php", data={"_csrf": csrf(page), "do": "evaluate"}, allow_redirects=False)
 check("classifier evaluate shows accuracy", r.status_code == 200 and "examples correct" in r.text and not php_errors(r.text))
+r = ad.post(BASE + "/admin/classifier.php", data={"_csrf": csrf(page), "do": "test", "text": "florb pexlin quorax xyzzy"}, allow_redirects=False)
+check("classifier explains low-confidence fallback routing",
+      r.status_code == 200 and "first active category" in r.text and "General and other" in r.text)
 r = ad.post(BASE + "/admin/classifier.php", data={"_csrf": csrf(page), "do": "add", "category_id": "1", "sample": "My exam script was lost by the department"}, allow_redirects=False)
 check("add training example", r.status_code == 302 and sql("SELECT COUNT(*) FROM training_samples WHERE source='admin'") == "1")
 # settings
@@ -207,12 +231,25 @@ for n, t in {1: "Responsible office officer", 2: "Head of department or section"
 r = ad.post(BASE + "/admin/settings.php", data=data, allow_redirects=False); check("save levels", r.status_code == 302, r.status_code)
 data["response_hours[1]"] = "-3"
 r = ad.post(BASE + "/admin/settings.php", data=data, allow_redirects=False); check("bad level values rejected", r.status_code == 200 and "time limits between" in r.text)
-r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "category_add", "name": "Transport", "department": "Transport Office"}, allow_redirects=False); check("add category", r.status_code == 302 and sql("SELECT COUNT(*) FROM categories WHERE name='Transport'") == "1")
+r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "department_add", "name": "Test School of Arts"}, allow_redirects=False)
+arts_dept = sql("SELECT id FROM departments WHERE name='Test School of Arts'")
+check("admin can add a department", r.status_code == 302 and arts_dept != "")
+r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "office_add", "department_id": arts_dept, "name": "Student Support Office"}, allow_redirects=False)
+support_office = sql(f"SELECT id FROM offices WHERE department_id={arts_dept} AND name='Student Support Office'")
+check("admin can add an office under a department", r.status_code == 302 and support_office != "")
+page = ad.get(BASE + "/admin/settings.php").text
+r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "department_save", "id": arts_dept, "name": "Test School of Arts", "is_active": "1"}, allow_redirects=False)
+check("admin can edit a department", r.status_code == 302 and sql(f"SELECT is_active FROM departments WHERE id={arts_dept}") == "1")
+r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "office_save", "id": support_office, "department_id": arts_dept, "name": "Student Support Office", "is_active": "1"}, allow_redirects=False)
+check("admin can edit an office", r.status_code == 302 and sql(f"SELECT is_active FROM offices WHERE id={support_office}") == "1")
+r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "category_add", "name": "Transport", "department": "Transport Office"}, allow_redirects=False)
+check("admin can add a category with its office destination",
+      r.status_code == 302 and sql("SELECT COUNT(*) FROM categories WHERE name='Transport' AND department='Transport Office'") == "1")
 # users
 page = ad.get(BASE + "/admin/users.php?new=1").text
 r = ad.post(BASE + "/admin/users.php", data={"_csrf": csrf(page), "do": "save", "id": "0", "full_name": "Test Officer", "email": "new.officer@kiu.test", "role": "officer", "officer_level": "2", "category_id": "0", "password": "Passw0rd!x"}, allow_redirects=False)
 check("create officer", r.status_code == 302 and sql("SELECT officer_level FROM users WHERE email='new.officer@kiu.test'") == "2")
-r = ad.post(BASE + "/admin/users.php", data={"_csrf": csrf(page), "do": "save", "id": "0", "full_name": "Dup", "email": "new.officer@kiu.test", "role": "student", "password": "Passw0rd!x"}, allow_redirects=False)
+r = ad.post(BASE + "/admin/users.php", data={"_csrf": csrf(page), "do": "save", "id": "0", "full_name": "Dup", "email": "new.officer@kiu.test", "role": "student", "department_id": arts_dept, "office_id": support_office, "password": "Passw0rd!x"}, allow_redirects=False)
 check("duplicate email rejected", r.status_code == 200 and "already uses" in r.text)
 nid = sql("SELECT id FROM users WHERE email='new.officer@kiu.test'")
 r = ad.post(BASE + "/admin/users.php", data={"_csrf": csrf(page), "do": "toggle", "id": nid}, allow_redirects=False)
@@ -226,14 +263,31 @@ check("admin reassign", sql(f"SELECT current_level FROM cases WHERE id={acid}") 
 tok = csrf(st.get(BASE + "/submit.php").text)
 r = st.post(BASE + "/api/suggest.php", json={"text": "The lecturer never comes to class and exams are near"}, headers={"X-CSRF-Token": tok})
 j = r.json(); check("suggest API", j.get("ok") and j.get("category") == "Lecturers and teaching", j)
+r = st.post(BASE + "/api/suggest.php", json={"text": "florb pexlin quorax xyzzy"}, headers={"X-CSRF-Token": tok})
+j = r.json(); check("uncertain suggestion explains fallback category",
+                     j.get("ok") and j.get("category") and j.get("auto_route") and j.get("fallback"))
 r = st.post(BASE + "/api/suggest.php", json={"text": "x"}, headers={"X-CSRF-Token": "bad"}); check("suggest API rejects bad token", r.status_code == 419)
 
 
 # ---------- registration ----------
+sql("INSERT INTO departments (name) VALUES ('Test School of Mathematics')")
+math_dept = sql("SELECT id FROM departments WHERE name='Test School of Mathematics'")
+sql(f"INSERT INTO offices (department_id, name) VALUES ({math_dept}, 'Information Technology Office')")
+it_office = sql(f"SELECT id FROM offices WHERE department_id={math_dept} AND name='Information Technology Office'")
+sql("INSERT INTO departments (name) VALUES ('Test School of Sciences')")
+science_dept = sql("SELECT id FROM departments WHERE name='Test School of Sciences'")
+sql(f"INSERT INTO offices (department_id, name) VALUES ({science_dept}, 'Student Records Office')")
+records_office = sql(f"SELECT id FROM offices WHERE department_id={science_dept} AND name='Student Records Office'")
 rg = sess()
-newstu = {"full_name": "Test Student", "email": "reg.test@kiu.test", "reg_no": "2026/DIT/777", "password": "Passw0rd!x", "password2": "Passw0rd!x"}
+newstu = {"full_name": "Test Student", "email": "reg.test@kiu.test", "reg_no": "2026/DIT/777", "department_id": math_dept, "office_id": it_office, "password": "Passw0rd!x", "password2": "Passw0rd!x"}
+r = get(rg, "/register.php")
+check("registration shows departments and matching office choices", "Test School of Mathematics" in r.text and f'data-department="{math_dept}"' in r.text and "Information Technology Office" in r.text)
+r = post(rg, "/register.php", dict(newstu, office_id="0"), token_from="/register.php")
+check("registration requires an office within the selected department", r.status_code == 200 and "Choose a department and an office" in r.text)
+r = post(rg, "/register.php", dict(newstu, department_id=science_dept, office_id=it_office), token_from="/register.php")
+check("registration rejects an office from another department", r.status_code == 200 and "Choose a department and an office" in r.text)
 r = post(rg, "/register.php", newstu, token_from="/register.php")
-check("registration creates a student and logs in", r.status_code == 302 and "submit.php" in r.headers.get("Location", "") and sql("SELECT role FROM users WHERE email='reg.test@kiu.test'") == "student", r.status_code)
+check("registration creates a student with department and office", r.status_code == 302 and "submit.php" in r.headers.get("Location", "") and sql("SELECT role FROM users WHERE email='reg.test@kiu.test'") == "student" and sql("SELECT CONCAT(department_id, ':', office_id) FROM users WHERE email='reg.test@kiu.test'") == f"{math_dept}:{it_office}", r.status_code)
 r = post(sess(), "/register.php", newstu, token_from="/register.php"); check("duplicate email registration rejected", r.status_code == 200 and "already exists" in r.text)
 r = post(sess(), "/register.php", dict(newstu, email="x1@kiu.test", password="short", password2="short"), token_from="/register.php"); check("short password rejected", r.status_code == 200 and "at least 8" in r.text)
 r = post(sess(), "/register.php", dict(newstu, email="x2@kiu.test", password2="Different1!"), token_from="/register.php"); check("password mismatch rejected", r.status_code == 200 and "do not match" in r.text)
@@ -265,11 +319,11 @@ check("unconfirmed resolved case closes by itself", sql("SELECT status FROM case
 
 # ---------- admin: edit user, edit category, remove AI example ----------
 page = ad.get(BASE + "/admin/users.php?edit=3").text
-r = ad.post(BASE + "/admin/users.php", data={"_csrf": csrf(page), "do": "save", "id": "3", "full_name": "Brian Renamed", "email": "student2@kiu.test", "role": "student", "password": ""}, allow_redirects=False)
-check("admin can edit a user", r.status_code == 302 and sql("SELECT full_name FROM users WHERE id = 3") == "Brian Renamed")
+r = ad.post(BASE + "/admin/users.php", data={"_csrf": csrf(page), "do": "save", "id": "3", "full_name": "Brian Renamed", "email": "student2@kiu.test", "role": "student", "department_id": math_dept, "office_id": it_office, "password": ""}, allow_redirects=False)
+check("admin can edit a user and their department", r.status_code == 302 and sql("SELECT full_name FROM users WHERE id = 3") == "Brian Renamed" and sql("SELECT CONCAT(department_id, ':', office_id) FROM users WHERE id = 3") == f"{math_dept}:{it_office}")
 page = ad.get(BASE + "/admin/settings.php").text
 r = ad.post(BASE + "/admin/settings.php", data={"_csrf": csrf(page), "do": "category_save", "id": "1", "name": "Results and marks", "department": "Faculty Registry", "is_active": "1"}, allow_redirects=False)
-check("admin can edit a category", r.status_code == 302 and sql("SELECT department FROM categories WHERE id = 1") == "Faculty Registry")
+check("admin can edit a category destination", r.status_code == 302 and sql("SELECT department FROM categories WHERE id = 1") == "Faculty Registry")
 sid = sql("SELECT id FROM training_samples WHERE source='admin' LIMIT 1")
 page = ad.get(BASE + "/admin/classifier.php").text
 r = ad.post(BASE + "/admin/classifier.php", data={"_csrf": csrf(page), "do": "delete", "id": sid}, allow_redirects=False)
@@ -283,6 +337,10 @@ r = post(off2, "/case-action.php", {"id": cid2, "action": "category", "category_
 check("officer can move a case to another category", sql(f"SELECT cat.name FROM cases c JOIN categories cat ON cat.id=c.category_id WHERE c.id={cid2}") == "ICT and student portal")
 check("the correction is added to the AI training data", int(sql("SELECT COUNT(*) FROM training_samples")) == before + 1)
 check("moved case goes to an ICT officer", sql(f"SELECT u.email FROM cases c JOIN users u ON u.id=c.assigned_to WHERE c.id={cid2}").startswith("ict."))
+off3, _ = login("ict.l1@kiu.test")
+r = post(off3, "/case-action.php", {"id": cid2, "action": "category", "category_id": sql("SELECT id FROM categories WHERE name='Transport'")}, token_from=f"/case.php?id={cid2}")
+check("category change with no matching officer retains the previous handler",
+      sql(f"SELECT assigned_to FROM cases WHERE id={cid2}") != "NULL")
 
 # login throttle
 for i in range(5): login("throttle@kiu.test", "bad%d" % i)

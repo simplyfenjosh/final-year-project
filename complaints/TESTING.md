@@ -1,6 +1,6 @@
 # Testing
 
-Use this table in **Chapter 4 (unit, integration and system testing)**. The "Result" column shows what happened when these tests were run on PHP 8.3 with MariaDB 10.11, in October 2026, using `tests/e2e_test.py` (113 automated checks, all passed) plus the manual timing run described under TC-28. Run them again on your own computer and take screenshots. Your own results are the ones that count in your report.
+Use this table in **Chapter 4 (unit, integration and system testing)**. The "Result" column records the October 2026 baseline on PHP 8.3 with MariaDB 10.11. The original 113 automated checks passed, but the department/office tests added below have not yet been run. Run the tests on your own computer and take screenshots; your own results are the ones that count in your report.
 
 ## How to run the automated test
 
@@ -49,15 +49,16 @@ See the instructions at the top of `tests/e2e_test.py`. Run it on a fresh instal
 | TC-37 | AI | Press Measure accuracy | Leave-one-out accuracy shown (about 80% on the starting data) | Passed |
 | TC-38 | Reports | Open the dashboard and export the CSV | Figures shown. CSV opens in Excel and formulas are neutralised | Passed |
 | TC-39 | Alerts | Open the Alerts page, press Mark all as read | Count drops to zero. Emails are listed in Admin > Emails | Passed |
+| TC-40 | Registration | Choose a department and office; try an office belonging to a different department | Matching department/office saved; mismatched selection rejected | Not run |
+| TC-41 | Admin | Add and edit departments and offices in Settings | Choices are available on registration and can be managed by admins | Not run |
 
 ## Accuracy of the AI
 
 | Test | Examples | Correct | Accuracy |
 |---|---|---|---|
-| Leave-one-out on the starting examples | 245 | 196 | 79.7% |
-| 45 new complaints written separately | 45 | 41 | 91.1% |
+| Leave-one-out on the current starting examples | 192 | 160 | 83.3% |
 
-The second test is small and the sentences were written by the developer, so treat it as a rough guide. For your report, collect 50 to 100 real or realistic complaints from students, label them by hand, and measure again.
+This is a training-set measure, not an independent accuracy estimate. For your report, collect 50 to 100 real or realistic complaints from students, label them by hand, and measure them separately.
 
 ## Evaluation of the system (your Objective 5)
 

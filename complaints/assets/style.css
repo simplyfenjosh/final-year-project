@@ -1,8 +1,7 @@
 /*
  * KIU Complaints & Requests Desk
  * Design idea: a quiet navy-and-paper interface where colour is reserved for meaning.
- * Steel blue -> amber -> burnt orange -> oxblood is the priority scale, and the same four colours
- * run through the escalation ladder, the badges and the queue, so a case's urgency can be read at a glance.
+ * The escalation ladder moves from blue to green to yellow to red, so a case's level is clear at a glance.
  */
 :root {
   --paper: #f4f6fa;
@@ -164,15 +163,34 @@ ul.plain li { padding: .35rem 0; border-bottom: 1px solid var(--line); }
 .track-box { background: var(--surface); border: 1.5px solid var(--ink); border-radius: var(--radius); padding: 1.25rem; }
 .track-box h2 { margin-bottom: .75rem; }
 
-/* The escalation ladder: the same four colours as the priority scale */
+/* Escalation levels */
 .ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); counter-reset: rung; }
 .rung { background: var(--surface); border: 1px solid var(--line); border-top: 6px solid var(--p-normal); border-radius: var(--radius); padding: .8rem .9rem; }
-.rung:nth-child(2) { border-top-color: #c98a1a; }
-.rung:nth-child(3) { border-top-color: var(--p-urgent); }
-.rung:nth-child(4) { border-top-color: var(--p-critical); }
+.rung:nth-child(1) { border-top-color: #2563eb; }
+.rung:nth-child(2) { border-top-color: #16834a; }
+.rung:nth-child(3) { border-top-color: #d6a800; }
+.rung:nth-child(4) { border-top-color: #c62828; }
 .rung .level { font-weight: 800; font-size: 1.05rem; }
 .rung .who { font-weight: 600; }
 .rung .limit { color: var(--slate); font-size: .9rem; }
+.level-key { margin-top: 1rem; padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.level-key-items { display: flex; flex-wrap: wrap; gap: .5rem 1rem; list-style: none; margin: .4rem 0; padding: 0; }
+.level-key-items li { display: inline-flex; align-items: center; gap: .4rem; font-size: .875rem; }
+.key-swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 50%; }
+.key-level-1 { background: #2563eb; }
+.key-level-2 { background: #16834a; }
+.key-level-3 { background: #d6a800; }
+.key-level-4 { background: #c62828; }
+.key-previous { background: #d1d5db; }
+.level-key p { margin: .35rem 0 0; font-size: .875rem; }
+.level-key-details { margin-top: .55rem; border-top: 1px solid var(--line); padding-top: .55rem; }
+.level-key-details summary { cursor: pointer; font-size: .9rem; font-weight: 600; }
+.level-key-details dl { display: grid; grid-template-columns: minmax(8rem, auto) 1fr; gap: .25rem .75rem; margin: .65rem 0; font-size: .875rem; }
+.level-key-details dt { font-weight: 600; }
+.level-key-details dd { margin: 0; color: var(--slate); }
+.level-key-details .priority-key-title { margin: .65rem 0 .25rem; }
+.priority-key { display: flex; flex-wrap: wrap; gap: .4rem 1rem; list-style: none; margin: 0; padding: 0; font-size: .875rem; }
+.priority-key li { display: inline-flex; align-items: center; gap: .35rem; }
 .section-gap { margin-top: 2.25rem; }
 .message-thread { display: grid; gap: .75rem; max-height: 28rem; overflow-y: auto; margin: 1rem 0; }
 .message-item { padding: .75rem; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -187,10 +205,20 @@ ul.plain li { padding: .35rem 0; border-bottom: 1px solid var(--line); }
 .ladder-v li::after { content: ""; position: absolute; left: .8rem; top: 2.25rem; bottom: -.5rem; width: 2px; background: var(--line); }
 .ladder-v li:last-child::after { display: none; }
 .ladder-v li.done { color: var(--ink); }
-.ladder-v li.done::before { background: var(--ink); border-color: var(--ink); color: #fff; }
+.ladder-v li.level-1 { --rung: #2563eb; }
+.ladder-v li.level-2 { --rung: #16834a; }
+.ladder-v li.level-3 { --rung: #d6a800; }
+.ladder-v li.level-4 { --rung: #c62828; }
+.ladder-v li.level-1::before { background: #2563eb; border-color: #2563eb; color: #fff; }
+.ladder-v li.level-2::before { background: #16834a; border-color: #16834a; color: #fff; }
+.ladder-v li.level-3::before { background: #d6a800; border-color: #d6a800; color: #1f2937; }
+.ladder-v li.level-4::before { background: #c62828; border-color: #c62828; color: #fff; }
 .ladder-v li.current { color: var(--ink); background: #eef1f6; margin-left: -.5rem; padding-left: 2.9rem; border-radius: var(--radius); }
 .ladder-v li.current::before { left: .5rem; background: #fff; border-color: var(--rung, var(--ink)); color: var(--ink); }
 .ladder-v li.current::after { left: 1.3rem; }
+.ladder-v li.previous { color: #7b8493; }
+.ladder-v li.previous::before { background: #d1d5db; border-color: #d1d5db; color: #fff; }
+.ladder-v li.previous::after { background: #d1d5db; }
 .ladder-v .name { font-weight: 600; display: block; }
 .ladder-v .sub { font-size: .875rem; display: block; }
 

@@ -48,5 +48,32 @@ page_header('Home', 'index.php');
       </li>
     <?php endforeach; ?>
   </ol>
+  <aside class="level-key" aria-labelledby="level-key-title">
+    <strong id="level-key-title">Quick key</strong>
+    <ul class="level-key-items">
+      <li><span class="key-swatch key-level-1" aria-hidden="true"></span>Level 1</li>
+      <li><span class="key-swatch key-level-2" aria-hidden="true"></span>Level 2</li>
+      <li><span class="key-swatch key-level-3" aria-hidden="true"></span>Level 3</li>
+      <li><span class="key-swatch key-level-4" aria-hidden="true"></span>Level 4</li>
+      <li><span class="key-swatch key-previous" aria-hidden="true"></span>Previous level</li>
+    </ul>
+    <p class="muted">“Responds within” is the time allowed before a case escalates to the next level.</p>
+    <details class="level-key-details">
+      <summary>What do the other terms mean?</summary>
+      <dl>
+        <dt>Current handler</dt><dd>The staff member responsible for the case now.</dd>
+        <dt>Received</dt><dd>When the current handler was assigned the case.</dd>
+        <dt>Resolve within</dt><dd>After responding, the handler’s time to resolve the case.</dd>
+        <dt>Escalation</dt><dd>If a deadline is missed, the case moves to the next available level.</dd>
+      </dl>
+      <p class="priority-key-title"><strong>Priority labels</strong></p>
+      <ul class="priority-key">
+        <li><?= priority_badge('Normal') ?> Routine case</li>
+        <li><?= priority_badge('High') ?> Needs attention</li>
+        <li><?= priority_badge('Urgent') ?> Shorter response time</li>
+        <li><?= priority_badge('Critical') ?> Senior management is alerted</li>
+      </ul>
+    </details>
+  </aside>
 </section>
 <?php page_footer();

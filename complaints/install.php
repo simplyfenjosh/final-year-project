@@ -135,7 +135,7 @@ try {
         $add('Amina (demo student)', 'student@kiu.test', '2026/DIT/001', 'student', null, null);
         $add('Brian (demo student)', 'student2@kiu.test', '2026/DIT/002', 'student', null, null);
         $short = ['results' => 'Results', 'fees' => 'Fees', 'hostel' => 'Hostel', 'registry' => 'Registry', 'lecturers' => 'Teaching',
-                  'ict' => 'ICT', 'facilities' => 'Facilities', 'safety' => 'Safety', 'general' => 'General'];
+                  'ict' => 'ICT', 'facilities' => 'Facilities'];
         foreach ($data as $cat) {
             $label = $short[$cat['slug']] ?? ucfirst($cat['slug']);
             $add($label . ' Officer', $cat['slug'] . '.l1@kiu.test', null, 'officer', 1, $catIds[$cat['slug']]);
@@ -240,8 +240,7 @@ try {
         $overdue($e3['id']);                                      // -> Level 4 (Critical)
         $overdue($e3['id']);                                      // top level misses it too -> critical alert
 
-        // Urgent anonymous case, and a fresh case waiting at Level 1
-        $make('complaint', 'Harassment by a security guard', 'A security guard at the gate harassed me and threatened me when I came back late. I do not feel safe.', null);
+        // Fresh cases waiting at Level 1
         $make('request', 'Letter confirming I am a student', 'I need a letter confirming that I am a student for my visa application.', $amina);
         $make('complaint', 'Bed bugs in my hostel room', 'There are bed bugs in my hostel room and the matron has not sent anyone to spray. I cannot sleep.', $brian);
         $make('complaint', 'Cannot log in to the student portal', 'I cannot log in to the student portal. My password reset email never arrives and registration closes soon.', $amina);

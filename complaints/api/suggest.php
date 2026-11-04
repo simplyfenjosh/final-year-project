@@ -19,20 +19,27 @@ if ($sent === '' || empty($_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], 
 $input = json_decode(file_get_contents('php://input'), true);
 $text  = mb_substr(trim((string)($input['text'] ?? '')), 0, 2000);
 if (mb_strlen($text) < 10) {
-    echo json_encode(['ok' => true, 'category' => null, 'urgent' => false]);
+    echo json_encode(['ok' => true, 'category' => null, 'urgent' => false, 'auto_route' => false]);
     exit;
 }
 
 $pdo  = db();
 $pred = Classifier::predict(Classifier::train($pdo), $text);
 $urgent = Classifier::urgency($text)['urgent'];
-$out = ['ok' => true, 'category' => null, 'department' => null, 'confidence' => $pred['confidence'], 'urgent' => $urgent];
-if ($pred['category_id'] !== null && $pred['confidence'] >= (float)config('ai_min_confidence', 0.4)) {
-    $st = $pdo->prepare('SELECT name, department FROM categories WHERE id = ? AND is_active = 1');
-    $st->execute([$pred['category_id']]);
+$threshold = (float)config('ai_min_confidence', 0.4);
+$sure = $pred['category_id'] !== null && $pred['confidence'] >= $threshold;
+$categoryId = $sure ? (int)$pred['category_id'] : CaseService::fallbackCategoryId($pdo);
+$out = [
+    'ok' => true, 'category' => null, 'department' => null,
+    'confidence' => $pred['confidence'], 'auto_route' => $categoryId !== null, 'fallback' => !$sure, 'urgent' => $urgent,
+];
+if ($categoryId !== null) {
+    $st = $pdo->prepare('SELECT c.name, c.department FROM categories c WHERE c.id = ? AND c.is_active = 1');
+    $st->execute([$categoryId]);
     if ($c = $st->fetch()) {
         $out['category'] = $c['name'];
         $out['department'] = $c['department'];
+        $out['auto_route'] = true;
     }
 }
 echo json_encode($out);

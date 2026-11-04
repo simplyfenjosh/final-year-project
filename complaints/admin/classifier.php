@@ -66,12 +66,12 @@ page_header('AI classifier', 'admin/classifier.php');
     <?php if ($test): ?>
       <h3 style="margin-top:1.25rem">Result</h3>
       <?php if ($test['known_words'] === 0): ?>
-        <p class="muted">The AI does not recognise any word in this text, so it would use the general category.</p>
+        <p class="muted">The AI does not recognise any words in this text. The system uses the General and other category when active, or the first active category.</p>
       <?php else: ?>
         <?php foreach (array_slice($test['probabilities'], 0, 5, true) as $cid => $p): if (!isset($names[$cid])) continue; ?>
           <div class="prob-row"><span><?= e($names[$cid]) ?></span><span class="bar"><span class="track" style="grid-column:1 / -1"><span class="fill <?= $cid === $test['category_id'] ? '' : 'warn' ?>" style="width:<?= round($p * 100) ?>%"></span></span></span><span class="num"><?= Classifier::percent($p) ?>%</span></div>
         <?php endforeach; ?>
-        <p class="muted small">It would be used automatically only when the top result is at least <?= round(config('ai_min_confidence') * 100) ?>%. Below that the case goes to General and other.</p>
+        <p class="muted small">The AI uses the top result when it reaches <?= round(config('ai_min_confidence') * 100) ?>% confidence. Otherwise, it uses General and other when active, or the first active category.</p>
       <?php endif; ?>
       <p><?= $test['urgency']['urgent'] ? priority_badge('Urgent') . ' Danger words found: ' . e(implode(', ', $test['urgency']['matched'])) : 'No danger words found, so the priority starts as Normal.' ?></p>
     <?php endif; ?>

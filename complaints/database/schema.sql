@@ -3,6 +3,21 @@
 -- Create a database called kiu_crms first, then import this file (phpMyAdmin > Import),
 -- or just open install.php in the browser and it does everything for you.
 
+CREATE TABLE IF NOT EXISTS departments (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(120) NOT NULL UNIQUE,
+  is_active   TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS offices (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  department_id  INT UNSIGNED NOT NULL,
+  name           VARCHAR(120) NOT NULL,
+  is_active      TINYINT(1) NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_office_department_name (department_id, name),
+  CONSTRAINT fk_offices_department FOREIGN KEY (department_id) REFERENCES departments(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS categories (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name        VARCHAR(80)  NOT NULL UNIQUE,
@@ -29,9 +44,13 @@ CREATE TABLE IF NOT EXISTS users (
   role           ENUM('student','officer','admin','operational_admin','technical_admin','user_admin','vice_chancellor') NOT NULL DEFAULT 'student',
   officer_level  TINYINT UNSIGNED NULL,      -- 1 to 4 for officers
   category_id    INT UNSIGNED NULL,          -- NULL = handles every category (for example the Registrar)
+  department_id  INT UNSIGNED NULL,
+  office_id      INT UNSIGNED NULL,
   is_active      TINYINT(1) NOT NULL DEFAULT 1,
   created_at     DATETIME NOT NULL,
-  CONSTRAINT fk_users_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+  CONSTRAINT fk_users_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+  CONSTRAINT fk_users_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_users_office FOREIGN KEY (office_id) REFERENCES offices(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS cases (

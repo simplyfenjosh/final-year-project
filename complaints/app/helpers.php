@@ -441,8 +441,8 @@ function page_header(string $title, string $current = ''): void
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= e(url('assets/style.css')) ?>">
-<script src="<?= e(url('assets/app.js')) ?>" defer></script>
+<link rel="stylesheet" href="<?= e(url('assets/style.css?v=5')) ?>">
+<script src="<?= e(url('assets/app.js?v=2')) ?>" defer></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>

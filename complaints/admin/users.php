@@ -7,6 +7,8 @@ $assignableRoles = $canManageAdminRoles
     : ['student', 'officer'];
 $pdo    = db();
 $cats   = $pdo->query('SELECT id, name FROM categories ORDER BY name')->fetchAll();
+$departments = $pdo->query('SELECT id, name FROM departments ORDER BY name')->fetchAll();
+$offices = $pdo->query('SELECT id, name, department_id FROM offices ORDER BY name')->fetchAll();
 $levels = levels();
 $errors = [];
 $edit   = null;
@@ -42,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'role'          => $_POST['role'] ?? 'student',
             'officer_level' => (int)($_POST['officer_level'] ?? 0),
             'category_id'   => (int)($_POST['category_id'] ?? 0),
+            'department_id' => (int)($_POST['department_id'] ?? 0),
+            'office_id'     => (int)($_POST['office_id'] ?? 0),
         ];
         $password = (string)($_POST['password'] ?? '');
 
@@ -49,6 +53,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!filter_var($edit['email'], FILTER_VALIDATE_EMAIL) || mb_strlen($edit['email']) > 150) { $errors[] = 'Enter a valid email address.'; }
         if (!in_array($edit['role'], $assignableRoles, true)) { $errors[] = 'Choose a role you are allowed to assign.'; }
         if ($edit['role'] === 'officer' && !isset($levels[$edit['officer_level']])) { $errors[] = 'Choose a level for the officer.'; }
+        if ($edit['role'] === 'student' && ($edit['department_id'] || $edit['office_id'])) {
+            $st = $pdo->prepare(
+                'SELECT 1 FROM offices o JOIN departments d ON d.id = o.department_id
+                 WHERE o.id = ? AND o.department_id = ?'
+            );
+            $st->execute([$edit['office_id'], $edit['department_id']]);
+            if (!$st->fetchColumn()) { $errors[] = 'Choose a department and an office within that department.'; }
+        }
         if (($id === 0 && strlen($password) < 8) || ($password !== '' && strlen($password) < 8)) { $errors[] = 'The password must have at least 8 characters.'; }
         if ($id === (int)$admin['id'] && $edit['role'] !== $admin['role']) { $errors[] = 'You cannot change your own role.'; }
         if ($id && !$canManageAdminRoles) {
@@ -64,10 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$errors) {
             $level = $edit['role'] === 'officer' ? $edit['officer_level'] : null;
             $cat   = ($edit['role'] === 'officer' && $edit['category_id'] > 0) ? $edit['category_id'] : null;
+            $department = $edit['role'] === 'student' && $edit['department_id'] > 0 ? $edit['department_id'] : null;
+            $office = $edit['role'] === 'student' && $edit['office_id'] > 0 ? $edit['office_id'] : null;
             try {
                 if ($id) {
-                    $sql = 'UPDATE users SET full_name = ?, email = ?, reg_no = ?, role = ?, officer_level = ?, category_id = ?';
-                    $args = [$edit['full_name'], $edit['email'], $edit['reg_no'] ?: null, $edit['role'], $level, $cat];
+                    $sql = 'UPDATE users SET full_name = ?, email = ?, reg_no = ?, role = ?, officer_level = ?, category_id = ?, department_id = ?, office_id = ?';
+                    $args = [$edit['full_name'], $edit['email'], $edit['reg_no'] ?: null, $edit['role'], $level, $cat, $department, $office];
                     if ($password !== '') {
                         $sql .= ', password_hash = ?';
                         $args[] = password_hash($password, PASSWORD_DEFAULT);
@@ -76,10 +90,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     flash('success', 'Account saved.');
                 } else {
                     $pdo->prepare(
-                        'INSERT INTO users (full_name, email, reg_no, password_hash, role, officer_level, category_id, is_active, created_at)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)'
+                        'INSERT INTO users (full_name, email, reg_no, password_hash, role, officer_level, category_id, department_id, office_id, is_active, created_at)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
                     )->execute([$edit['full_name'], $edit['email'], $edit['reg_no'] ?: null, password_hash($password, PASSWORD_DEFAULT),
-                                $edit['role'], $level, $cat, now()]);
+                                $edit['role'], $level, $cat, $department, $office, now()]);
                     flash('success', 'Account created.');
                 }
                 redirect('admin/users.php');
@@ -99,7 +113,7 @@ if ($edit === null && isset($_GET['edit'])) {
         fatal_page('No access', 'You can only manage student and officer accounts.');
     }
 } elseif ($edit === null && isset($_GET['new'])) {
-    $edit = ['id' => 0, 'full_name' => '', 'email' => '', 'reg_no' => '', 'role' => 'officer', 'officer_level' => 1, 'category_id' => 0];
+    $edit = ['id' => 0, 'full_name' => '', 'email' => '', 'reg_no' => '', 'role' => 'officer', 'officer_level' => 1, 'category_id' => 0, 'department_id' => 0, 'office_id' => 0];
 }
 
 $allRoles = ['student', 'officer', 'admin', 'operational_admin', 'technical_admin', 'user_admin', 'vice_chancellor'];
@@ -110,7 +124,9 @@ $args  = [];
 if ($role) { $where[] = 'u.role = ?'; $args[] = $role; }
 if ($q !== '') { $where[] = '(u.full_name LIKE ? OR u.email LIKE ?)'; $args[] = "%$q%"; $args[] = "%$q%"; }
 $st = $pdo->prepare(
-    "SELECT u.*, c.name AS category_name FROM users u LEFT JOIN categories c ON c.id = u.category_id
+    "SELECT u.*, c.name AS category_name, d.name AS department_name, o.name AS office_name FROM users u
+     LEFT JOIN categories c ON c.id = u.category_id
+     LEFT JOIN departments d ON d.id = u.department_id LEFT JOIN offices o ON o.id = u.office_id
      WHERE " . implode(' AND ', $where) . " ORDER BY FIELD(u.role, 'admin', 'operational_admin', 'technical_admin', 'user_admin', 'vice_chancellor', 'officer', 'student'), u.officer_level, u.full_name LIMIT 150"
 );
 $st->execute($args);
@@ -146,6 +162,16 @@ page_header('Users', 'admin/users.php');
             <option value="0">All categories (for example the Registrar)</option>
             <?php foreach ($cats as $c): ?><option value="<?= (int)$c['id'] ?>" <?= (int)$edit['category_id'] === (int)$c['id'] ? 'selected' : '' ?>><?= e($c['name']) ?></option><?php endforeach; ?>
           </select></div>
+        <div class="field"><label for="department_id">Department / school (students)</label>
+          <select id="department_id" name="department_id">
+            <option value="0">Not set</option>
+            <?php foreach ($departments as $d): ?><option value="<?= (int)$d['id'] ?>" <?= (int)($edit['department_id'] ?? 0) === (int)$d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option><?php endforeach; ?>
+          </select></div>
+        <div class="field"><label for="office_id">Office (students)</label>
+          <select id="office_id" name="office_id">
+            <option value="0">Not set</option>
+            <?php foreach ($offices as $o): ?><option value="<?= (int)$o['id'] ?>" data-department="<?= (int)$o['department_id'] ?>" <?= (int)($edit['office_id'] ?? 0) === (int)$o['id'] ? 'selected' : '' ?>><?= e($o['name']) ?></option><?php endforeach; ?>
+          </select></div>
         <div class="field"><label for="reg_no">Registration number (students)</label><input id="reg_no" name="reg_no" type="text" value="<?= e($edit['reg_no'] ?? '') ?>"></div>
         <div class="field"><label for="password">Password <?= $edit['id'] ? '(leave empty to keep the current one)' : '' ?></label>
           <input id="password" name="password" type="password" autocomplete="new-password" <?= $edit['id'] ? '' : 'required' ?>></div>
@@ -170,7 +196,9 @@ page_header('Users', 'admin/users.php');
     <tr>
       <td><?= e($u['full_name']) ?><br><span class="muted small"><?= e($u['email']) ?><?= $u['reg_no'] ? ' &middot; ' . e($u['reg_no']) : '' ?></span></td>
       <td><?= e(role_label($u['role'])) ?><?= $u['officer_level'] ? ' (Level ' . (int)$u['officer_level'] . ')' : '' ?></td>
-      <td><?= $u['role'] === 'officer' ? e($u['category_name'] ?? 'All categories') : '<span class="muted">-</span>' ?></td>
+      <td><?php if ($u['role'] === 'officer'): ?><?= e($u['category_name'] ?? 'All categories') ?>
+        <?php elseif ($u['role'] === 'student' && $u['department_name']): ?><?= e($u['department_name']) ?> &rsaquo; <?= e($u['office_name'] ?? 'Office not set') ?>
+        <?php else: ?><span class="muted">-</span><?php endif; ?></td>
       <td><?= $u['is_active'] ? '<span class="badge status-resolved">Active</span>' : '<span class="badge status-closed">Inactive</span>' ?></td>
       <td class="row">
         <?php if ($canManageAdminRoles || in_array($u['role'], ['student', 'officer'], true)): ?>

@@ -33,12 +33,12 @@ Every demo password is **`Demo@1234`**. Change them before real use.
 | Admin | `admin@kiu.test` | Dashboard, reports, users, settings, AI classifier |
 | Vice Chancellor | `vc@kiu.test` | School-wide read-only dashboard and staff messaging |
 | Student | `student@kiu.test`, `student2@kiu.test` | Submitting and tracking cases |
-| Level 1 officer | `fees.l1@kiu.test`, `registry.l1@kiu.test`, `hostel.l1@kiu.test`, `ict.l1@kiu.test`, `safety.l1@kiu.test` (an urgent case) | Working a queue |
+| Level 1 officer | `fees.l1@kiu.test`, `registry.l1@kiu.test`, `hostel.l1@kiu.test`, `ict.l1@kiu.test` | Working a queue |
 | Level 2 officer | `lecturers.l2@kiu.test` | A case that was escalated once |
 | Level 3 | `dean.students@kiu.test` | A case escalated twice |
 | Level 4 | `registrar@kiu.test` | A critical case |
 
-Other officers follow the pattern `results`, `fees`, `hostel`, `registry`, `lecturers`, `ict`, `facilities`, `safety` or `general`, then `.l1` or `.l2`, then `@kiu.test`.
+Other officers follow the pattern `results`, `fees`, `hostel`, `registry`, `lecturers`, `ict` or `facilities`, then `.l1` or `.l2`, then `@kiu.test`.
 
 ## Administrator roles
 
@@ -55,6 +55,7 @@ The general `admin` role retains access to all dashboards. A user admin cannot c
 ## Vice Chancellor dashboard
 
 For an existing installation, make sure an active account for `vc@kiu.test` exists, then run `database/migrations/2026_11_01_vice_chancellor.sql` once in phpMyAdmin. It adds the `vice_chancellor` role, creates the staff-message table, and assigns that account to the role. The Vice Chancellor dashboard provides school-wide case statistics, trend summaries and recommendations, plus a staff directory and direct messages with officers. The role is read-only for cases and cannot view or act on individual cases. Demo accounts use the password listed above; change it before real use.
+
 
 ## Show the escalation to your panel in two minutes
 
@@ -103,13 +104,13 @@ Titles and limits can be changed in **Admin > Settings**. Confirm the real chain
 
 `app/Classifier.php` is a **Naive Bayes text classifier** written from scratch (no libraries).
 
-1. It learns from example complaints stored in the `training_samples` table (245 to start).
+1. It learns from example complaints stored in the `training_samples` table (192 to start, across the active categories).
 2. For a new complaint it asks which category's examples use the same words, and turns the scores into percentages.
-3. The case goes to that office when the AI is at least 40% sure, otherwise to "General and other".
+3. The AI selects its top category when confidence reaches the configured threshold (40% by default). Otherwise, the system uses the active "General and other" category when available, or the first active category.
 4. When an officer moves a case to the right category, that case is **added as a new example**, so the model improves with use.
 5. A separate word list flags **urgent** cases, which get the shorter time limit.
 
-Accuracy on the starting data: about **80%** by leave-one-out testing (Admin > AI classifier > Measure accuracy), and about **91%** on 45 new sentences written separately. These are indicative. For your report, test it on complaints you collect yourself.
+Accuracy on the current starting data: **83.3%** (160 of 192) by leave-one-out testing (Admin > AI classifier > Measure accuracy). This is only an indicative training-set measure, not a guarantee of correct routing. For your report, test it on new complaints you collect and label yourself.
 
 ## Folder map
 

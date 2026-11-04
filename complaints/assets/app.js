@@ -2,7 +2,8 @@
  * Three small jobs:
  *  1. Keep the deadline countdowns ticking.
  *  2. On the submit form, show the AI's category suggestion while the student types.
- *  3. Ask "are you sure?" on buttons marked with data-confirm.
+ *  3. Limit office choices to the selected department.
+ *  4. Ask "are you sure?" on buttons marked with data-confirm.
  */
 (function () {
   'use strict';
@@ -79,10 +80,18 @@
           if (!data || !data.ok) return;
           var parts = [];
           if (data.category) {
-            parts.push('The system would send this to <strong>' + escapeHtml(data.department) + '</strong> as "' +
-              escapeHtml(data.category) + '" (' + Math.min(99, Math.floor(data.confidence * 100)) + '% sure).');
+            if (data.fallback) {
+              parts.push('The AI is unsure. The system will use <strong>' + escapeHtml(data.category) + '</strong> (' +
+                escapeHtml(data.department) + ') as the fallback. You can choose another category.');
+            } else if (data.auto_route) {
+              parts.push('The system would send this to <strong>' + escapeHtml(data.department) + '</strong> as "' +
+                escapeHtml(data.category) + '" (' + Math.min(99, Math.floor(data.confidence * 100)) + '% confidence).');
+            } else {
+              parts.push('Suggested category: <strong>' + escapeHtml(data.category) + '</strong> (' +
+                Math.min(99, Math.floor(data.confidence * 100)) + '% confidence). The AI is unsure, so choose the correct category before submitting.');
+            }
           } else {
-            parts.push('Keep typing. The system needs a few more details to choose an office.');
+            parts.push('Keep typing, or choose a category yourself if the AI cannot identify the right office.');
           }
           if (data.urgent) {
             parts.push('<strong>This looks urgent</strong>, so it will get a shorter time limit. If you are in danger, contact campus security now.');
@@ -104,13 +113,45 @@
     });
   }
 
+  /* ---------- 3. Department and office selection ---------- */
+  var department = document.getElementById('department_id');
+  var office = document.getElementById('office_id');
+  if (department && office) {
+    var placeholder = office.options[0].cloneNode(true);
+    var officeOptions = Array.prototype.slice.call(office.options, 1).map(function (option) {
+      return option.cloneNode(true);
+    });
+    var filterOffices = function () {
+      var selectedOffice = office.value;
+      while (office.options.length) {
+        office.remove(0);
+      }
+      office.add(placeholder.cloneNode(true));
+
+      var selectedMatches = false;
+      officeOptions.forEach(function (option) {
+        if (department.value && option.getAttribute('data-department') === department.value) {
+          var visibleOption = option.cloneNode(true);
+          if (visibleOption.value === selectedOffice) {
+            visibleOption.selected = true;
+            selectedMatches = true;
+          }
+          office.add(visibleOption);
+        }
+      });
+      if (!selectedMatches) office.value = '';
+    };
+    department.addEventListener('change', filterOffices);
+    filterOffices();
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 
-  /* ---------- 3. Confirm dialogs ---------- */
+  /* ---------- 4. Confirm dialogs ---------- */
   document.addEventListener('submit', function (event) {
     var message = event.target.getAttribute('data-confirm');
     if (message && !window.confirm(message)) {
